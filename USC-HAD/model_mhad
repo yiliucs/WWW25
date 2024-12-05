@@ -1,0 +1,373 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+# import numpy as np
+
+class cnn_layers_1(nn.Module):
+    """
+    CNN layers applied on acc sensor data to generate pre-softmax
+    ---
+    params for __init__():
+        input_size: e.g. 1
+        num_classes: e.g. 6
+    forward():
+        Input: data
+        Output: pre-softmax
+    """
+    def __init__(self, input_size):
+        super().__init__()
+
+        # Extract features, 2D conv layers
+        self.features = nn.Sequential(
+            nn.Conv2d(input_size, 64, 2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+
+            nn.Conv2d(64, 64, 2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+
+            nn.Conv2d(64, 32, 1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+
+            nn.Conv2d(32, 16, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+
+            )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), 16, -1)#[bsz, 16, 1, 198]
+
+        return x
+
+
+class cnn_layers_2(nn.Module):
+    """
+    CNN layers applied on acc sensor data to generate pre-softmax
+    ---
+    params for __init__():
+        input_size: e.g. 1
+        num_classes: e.g. 6
+    forward():
+        Input: data
+        Output: pre-softmax
+    """
+    def __init__(self, input_size):
+        super().__init__()
+
+        # Extract features, 2D conv layers
+        self.features = nn.Sequential(
+            nn.Conv2d(input_size, 64, 2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+
+            nn.Conv2d(64, 64, 2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+
+            nn.Conv2d(64, 32, 1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+
+            nn.Conv2d(32, 16, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+
+            )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), 16, -1)
+
+        return x
+
+
+class Encoder(nn.Module):
+    def __init__(self, input_size):
+        super().__init__()
+
+        self.encoder_1 = cnn_layers_1(input_size)
+        self.encoder_2 = cnn_layers_2(input_size)
+
+    def forward(self, x1, x2):
+
+        acc_output = self.encoder_1(x1)
+        gyro_output = self.encoder_2(x2)
+
+        return acc_output, gyro_output
+
+
+
+class MyMMModel(nn.Module):
+    """Model for human-activity-recognition."""
+
+    def __init__(self, num_classes, miss_modal, miss_rate):  # [4352539]
+        super().__init__()
+        self.modality = 'all'
+        self.miss_modal = miss_modal
+        self.miss_rate = miss_rate
+
+        self.encoder = Encoder(input_size=1)
+        self.uni=nn.Linear(3168, num_classes)
+        # self.gru = nn.GRU(198, 120, 2, batch_first=True)
+
+        # Classify output, fully connected layers
+        self.classifier = nn.Sequential(
+
+            # nn.Linear(3840, 1280),
+            # nn.BatchNorm1d(1280),
+            # nn.ReLU(inplace=True),
+            #
+            # nn.Linear(1280, 128),
+            # nn.BatchNorm1d(128),
+            # nn.ReLU(inplace=True),
+
+            nn.Linear(6336, num_classes),
+            )
+
+    def forward(self, x1, x2,latent=False,pad=None):
+        if latent:
+            feature = x1
+        elif pad == 1:
+            feature = torch.cat((x1[:, :3168], x2), dim=1)
+        elif pad == 2:
+            # print(x1.shape)
+            # print(x2[:,256:].shape)
+
+            feature = torch.cat((x1, x2[:, 3168:]), dim=1)
+            # feature, _ = self.gru(feature)
+            # feature = feature.contiguous().view(feature.size(0), 1920)
+        else:
+            feature_1, feature_2 = self.encoder(x1, x2)
+            feature_1, feature_2=feature_1.contiguous().view(-1, 3168), feature_2.contiguous().view(-1, 3168)
+            feature = torch.cat((feature_1, feature_2), dim=1)
+            # feature, _ = self.gru(feature)
+            # # print(feature.shape)# weighted sum
+            # feature = feature.contiguous().view(feature.size(0), 3840)
+
+        output = self.classifier(feature)
+
+        return output, feature
+
+    def forward_unpad(self, x1=None, x2=None,latent=False,pad=None):
+        if latent:
+            feature = x1
+            output = self.classifier(feature)
+
+        elif pad == 1:
+            feature = torch.cat((x1[:, :3168], x2), dim=1)
+            output = self.classifier(feature)
+
+        elif pad == 2:
+            # print(x1.shape)
+            # print(x2[:,256:].shape)
+
+            feature = torch.cat((x1, x2[:, 3168:]), dim=1)
+            # feature, _ = self.gru(feature)
+            # feature = feature.contiguous().view(feature.size(0), 1920)
+            output = self.classifier(feature)
+
+        elif x1 is not None:
+            feature_1 = self.encoder.encoder_1(x1)
+            feature=feature_1.contiguous().view(-1, 3168)
+            output = self.uni(feature)
+
+        elif x2 is not None:
+            feature_2 = self.encoder.encoder_2(x2)
+            feature= feature_2.contiguous().view(-1, 3168)
+            output = self.uni(feature)
+
+            # feature, _ = self.gru(feature)
+            # # print(feature.shape)# weighted sum
+            # feature = feature.contiguous().view(feature.size(0), 3840)
+
+
+        return output, feature
+
+
+
+
+class DivLoss(nn.Module):
+    """
+    Diversity loss for improving the performance.
+    """
+
+    def __init__(self):
+        """
+        Class initializer.
+        """
+        super().__init__()
+
+    def forward2(self, noises, layer):
+        """
+        Forward propagation.
+        """
+        if len(layer.shape) > 2:
+            layer = layer.view((layer.size(0), -1))
+        chunk_size = layer.size(0) // 2
+
+        ####### diversity loss ########
+        eps1, eps2=torch.split(noises, chunk_size, dim=0)
+        chunk1, chunk2=torch.split(layer, chunk_size, dim=0)
+        lz=torch.mean(torch.abs(chunk1 - chunk2)) / torch.mean(
+            torch.abs(eps1 - eps2))
+        eps=1 * 1e-5
+        diversity_loss=1 / (lz + eps)
+        return diversity_loss
+
+    def forward(self, noises, layer):
+        """
+        Forward propagation.
+        """
+        if len(layer.shape) > 2:
+            layer=layer.view((layer.size(0), -1))
+        chunk_size=layer.size(0) // 2
+
+        ####### diversity loss ########
+        eps1, eps2=torch.split(noises, chunk_size, dim=0)
+        chunk1, chunk2=torch.split(layer, chunk_size, dim=0)
+        lz=torch.mean(torch.abs(chunk1 - chunk2)) / torch.mean(
+            torch.abs(eps1 - eps2))
+        eps=1 * 1e-5
+        diversity_loss=1 / (lz + eps)
+        return diversity_loss
+
+
+class DiversityLoss(nn.Module):
+    """
+    Diversity loss for improving the performance.
+    """
+    def __init__(self, metric):
+        """
+        Class initializer.
+        """
+        super().__init__()
+        self.metric = metric
+        self.cosine = nn.CosineSimilarity(dim=2)
+
+    def compute_distance(self, tensor1, tensor2, metric):
+        """
+        Compute the distance between two tensors.
+        """
+        if metric == 'l1':
+            return torch.abs(tensor1 - tensor2).mean(dim=(2,))
+        elif metric == 'l2':
+            return torch.pow(tensor1 - tensor2, 2).mean(dim=(2,))
+        elif metric == 'cosine':
+            return 1 - self.cosine(tensor1, tensor2)
+        else:
+            raise ValueError(metric)
+
+    def pairwise_distance(self, tensor, how):
+        """
+        Compute the pairwise distances between a Tensor's rows.
+        """
+        n_data = tensor.size(0)
+        tensor1 = tensor.expand((n_data, n_data, tensor.size(1)))
+        tensor2 = tensor.unsqueeze(dim=1)
+        return self.compute_distance(tensor1, tensor2, how)
+
+    def forward(self, noises, layer):
+        """
+        Forward propagation.
+        """
+        if len(layer.shape) > 2:
+            layer = layer.view((layer.size(0), -1))
+        layer_dist = self.pairwise_distance(layer, how=self.metric)
+        noise_dist = self.pairwise_distance(noises, how='l2')
+        return torch.exp(torch.mean(-noise_dist * layer_dist))
+
+class Generator(nn.Module):
+    def __init__(self,  modality,opt,input_dim=12, embedding=False, latent_layer_idx=-1):
+        super(Generator, self).__init__()
+        self.embedding = embedding
+        #self.model=
+        self.opt=opt
+        self.latent_layer_idx = latent_layer_idx
+        self.modality =modality
+        #0.4 0..8use 3168 0.6 use 1584
+        self.hidden_dim, self.latent_dim, self.input_channel, self.n_class, self.noise_dim = 6336, 6336, 1, 12, 12
+        self.fc_configs = [input_dim*2, self.hidden_dim]
+        self.init_loss_fn()
+        self.build_network()
+
+    def get_number_of_parameters(self):
+        pytorch_total_params=sum(p.numel() for p in self.parameters() if p.requires_grad)
+        return pytorch_total_params
+
+    def init_loss_fn(self):
+        self.crossentropy_loss=nn.NLLLoss(reduce=False) # same as above
+        self.diversity_loss = DiversityLoss(metric='l1')
+        self.dist_loss = nn.MSELoss()
+
+    def build_network(self):
+        if self.embedding:
+            self.embedding_layer = nn.Embedding(self.n_class, self.noise_dim)
+        ### FC modules ####
+        self.fc_layers = nn.ModuleList()
+        for i in range(len(self.fc_configs) - 1):
+            input_dim, out_dim = self.fc_configs[i], self.fc_configs[i + 1]
+            fc = nn.Linear(input_dim, out_dim)
+            bn = nn.BatchNorm1d(out_dim)
+            act = nn.ReLU()
+            self.fc_layers += [fc, bn, act]
+        ### Representation layer
+        self.representation_layer = nn.Linear(self.fc_configs[-1], self.latent_dim)
+        # print("Build last layer {} X {}".format(self.fc_configs[-1], self.latent_dim))
+
+    def forward(self, labels, latent_layer_idx=-1, verbose=True):
+        """
+        G(Z|y) or G(X|y):
+        Generate either latent representation( latent_layer_idx < 0) or raw image (latent_layer_idx=0) conditional on labels.
+        :param labels:
+        :param latent_layer_idx:
+            if -1, generate latent representation of the last layer,
+            -2 for the 2nd to last layer, 0 for raw images.
+        :param verbose: also return the sampled Gaussian noise if verbose = True
+        :return: a dictionary of output information.
+        """
+        labels.cuda(self.opt.cuda_device)
+        # print(labels)
+        result = {}
+        batch_size = labels.shape[0]
+        eps = torch.rand((batch_size, self.noise_dim)).cuda(self.opt.cuda_device)# sampling from Gaussian
+        if verbose:
+            result['eps'] = eps
+        if self.embedding: # embedded dense vector
+            y_input = self.embedding_layer(labels).cuda(self.opt.cuda_device)
+        else: # one-hot (sparse) vector
+            y_input = torch.FloatTensor(batch_size, self.n_class).cuda(self.opt.cuda_device)
+            y_input.zero_()
+            #labels = labels.view
+            y_input.scatter_(1, labels.view(-1,1), 1)
+            # print(y_input)
+
+        z = torch.cat((eps, y_input), dim=1)
+        ### FC layers
+        for layer in self.fc_layers:
+            z = layer(z)
+        z = self.representation_layer(z)
+        result['output'] = z
+        return result
+
+
+class NoiseGenerator(nn.Module):
+    def __init__(self, input_shape):
+        super(NoiseGenerator, self).__init__()
+        self.fc = nn.Linear(input_shape, input_shape)
+        self.bn = nn.BatchNorm1d(out_dim)
+        self.act = nn.ReLU()
+      
+
+    def forward(self, x):
+        noise = self.fc(x)
+        return noise

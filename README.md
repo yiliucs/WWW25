@@ -1,5 +1,3 @@
-
-
 # README
 
 This project contains code for multiple datasets, with each dataset having its own folder. Below are the instructions for running the code for each dataset, as well as details about the Shapley value implementation.

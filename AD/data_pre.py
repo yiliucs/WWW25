@@ -180,10 +180,10 @@ class Multimodal_imdataset():
         self.x1_data = []
         self.y_data = []
 
-        # 记录每个类别的累计数据
+        
         self.accumulated_data = {}
 
-        # 设置最大累计数量
+     
         self.max_accumulation_count = accumulation_count
 
     def __len__(self):
@@ -197,12 +197,12 @@ class Multimodal_imdataset():
 
         if idx <= self.max_accumulation_count:
 
-            # 当累计数量未超过最大值时，将 x1 和 y 数据添加到列表中
+      
             x1 = np.load(self.folder_path + "audio/" + "{}.npy".format(idx))
             self.x1_data.append(x1)
             self.y_data.append(activity_label.item())
 
-            # 检查累计数量是否超过最大值，如果是，则清空 x1 和 y 的历史数据，并开始累计新的数据
+    
             if idx == self.max_accumulation_count:
                 # self.accumulated_data = {}
                 for x1_value, y_value in zip(self.x1_data, self.y_data):
@@ -214,22 +214,22 @@ class Multimodal_imdataset():
                 self.y_data = []
 
         else:
-            # 当累计数量超过最大值时，从已累计的数据中获取 x1 样本
+     
             x1 = self.get_x1_by_y(activity_label.item())
 
-            # 将 x1、x2 和 x3 数据转换为张量
+         
         sensor_data1 = torch.tensor(x1)
         sensor_data2 = torch.tensor(x2)
         sensor_data3 = torch.tensor(x3)
 
-        # 将 x2 和 x3 数据增加一维，以与 x1 数据匹配
+   
         sensor_data2 = torch.unsqueeze(sensor_data2, 0)
         sensor_data3 = torch.unsqueeze(sensor_data3, 0)
 
         return sensor_data1, sensor_data2, sensor_data3, activity_label
 
     def get_x1_by_y(self, y):
-        # 从已累计的数据中获取 y 对应的 x1 样本
+     
         x1_list = self.accumulated_data.get(y, [])
         if len(x1_list) == 0:
             return None

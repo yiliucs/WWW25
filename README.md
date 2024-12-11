@@ -64,3 +64,28 @@ The implementation of Shapley values is included in the aggregation section of t
 
 ---
 
+## New Experiments
+
+### Feature Visualization
+
+We explore the features extracted with and without the shared feature space method on the MHAD dataset. Specifically, we visualize the features of the individual modality (two modalities in total), before the fusion of modalities, and after the fusion of modalities. The visualization results are shown in the figure below.
+
+- w/o shared feature space for modality 1 in the MHAD dataset
+
+![avatar](https://github.com/yiliucs/WWW25/blob/main/MHAD-M1-Before.png)
+
+- w/ shared feature space for modality 1 in the MHAD dataset
+
+![avatar](https://github.com/yiliucs/WWW25/blob/main/MHAD-M1-After.png)
+
+- w/o shared feature space for modality 2 in the MHAD dataset
+
+![avatar](https://github.com/yiliucs/WWW25/blob/main/MHAD-M2-Before.png)
+
+- w/ shared feature space for modality 2 in the MHAD dataset
+
+![avatar](https://github.com/yiliucs/WWW25/blob/main/MHAD-M2-After.png)
+
+- w/o shared feature space for fused modality in the MHAD dataset
+
+![avatar](https://github.com/yiliucs/WWW25/blob/main/MHAD.png)
